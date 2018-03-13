@@ -42,10 +42,12 @@ func (p *Philosopher) ReleaseBottleTo (b Bottle, to *Philosopher) (error) {
     if (x == b) {
       queue, exists := p.bottleQueues[b.Id()]
       if (exists) {
-        p.bottleQueues[b.Id()] = append(queue, to)
+        queue = append(queue, to)
       } else {
-        p.bottleQueues[b.Id()] = []*Philosopher{ to }
+        queue = []*Philosopher{ to }
       }
+
+      fmt.Printf("release queue for bottle, %d: %v\n", b.Id(), queue)
     }
   }
 
@@ -87,18 +89,20 @@ func (p *Philosopher) think(secondsForThinking int) {
       p.Lock()
       fmt.Printf("about to send bottles %v\n", p.bottles)
       for _, b := range p.bottles {
-        queue, exists := p.bottleQueues[b.Id()]
-        if (exists) {
-          for len(queue) > 0 {
-            to, queue := queue[0], queue[1:]
-            e := to.ReceiveBottle(b, queue)
+        if (b != nil) {
+          queue, exists := p.bottleQueues[b.Id()]
+          if (exists) {
+            for len(queue) > 0 {
+              to, queue := queue[0], queue[1:]
+              e := to.ReceiveBottle(b, queue)
 
-            if (e == nil) {
-              break;
+              if (e == nil) {
+                break;
+              }
             }
-          }
 
-          delete(p.bottleQueues, b.Id())
+            delete(p.bottleQueues, b.Id())
+          }
         }
       }
 
@@ -120,15 +124,15 @@ func (p *Philosopher) thirst () {
       // should need to ask for necessary bottles only once
       for _, b := range p.requiredBottles {
         bottle := b
-        fmt.Printf("checking bottle availability %#v\n", bottle)
+        fmt.Printf("checking bottle availability %d\n", bottle.Id())
         otherDrinker := bottle.GetDrinker()
 
         if (otherDrinker == nil) {
           fmt.Printf("no one has bottle %02d, taking it immediately\n", b.Id())
           b.SetDrinker(*p)
-          p.bottles = append(p.bottles, b)
+          p.bottles = append(p.bottles, bottle)
         } else {
-          otherDrinker.ReleaseBottleTo(b, p)
+          otherDrinker.ReleaseBottleTo(bottle, p)
         }
       }
 
@@ -143,7 +147,7 @@ func (p *Philosopher) drink (secondsForDrinking int) {
   for state := range p.stateChannel {
     if (state == DRINKING) {
       p.CurrentState = state
-      fmt.Printf("philosopher %03d is drinking at %s with %#v bottles\n", p.id, time.Now().Format("20060102150405"), p.bottles)
+      fmt.Printf("philosopher %03d is drinking at %s with %v bottles\n", p.id, time.Now().Format("20060102150405"), p.bottles)
       time.Sleep(time.Duration(secondsForDrinking) * time.Second)
       p.stateChannel <- THINKING
     }
