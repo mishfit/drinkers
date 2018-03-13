@@ -7,9 +7,9 @@ import (
   "time"
 )
 
-type bottle interface {
+type Bottle interface {
   Id() int
-  GetDrinker() Philosopher
+  GetDrinker() *Philosopher
   SetDrinker(Philosopher) error
 }
 
@@ -24,14 +24,14 @@ const (
 type Philosopher struct {
   id int
   CurrentState State
-  requiredBottles []*bottle
-  bottles []bottle
+  requiredBottles []Bottle
+  bottles []Bottle
   bottleQueues map[int][]*Philosopher
   stateChannel chan State
   sync.RWMutex
 }
 
-func (p *Philosopher) ReleaseBottleTo (b bottle, to *Philosopher) (error) {
+func (p *Philosopher) ReleaseBottleTo (b Bottle, to *Philosopher) (error) {
   p.Lock()
   if (len(p.bottles) == 0) {
     return errors.New("philosopher doesn't have any bottles")
@@ -41,7 +41,11 @@ func (p *Philosopher) ReleaseBottleTo (b bottle, to *Philosopher) (error) {
   for _, x := range p.bottles {
     if (x == b) {
       queue, exists := p.bottleQueues[b.Id()]
-      p.bottleQueues[b.Id()] = append(queue, to)
+      if (exists) {
+        p.bottleQueues[b.Id()] = append(queue, to)
+      } else {
+        p.bottleQueues[b.Id()] = []*Philosopher{ to }
+      }
     }
   }
 
@@ -53,7 +57,7 @@ func (p *Philosopher) ReleaseBottleTo (b bottle, to *Philosopher) (error) {
   return nil
 }
 
-func (p *Philosopher) ReceiveBottle (b bottle, queue []*Philosopher) (error) {
+func (p *Philosopher) ReceiveBottle (b Bottle, queue []*Philosopher) (error) {
   // do I have this bottle?
   p.Lock()
   for _, x := range p.bottles {
@@ -78,10 +82,11 @@ func (p *Philosopher) think(secondsForThinking int) {
   for state := range p.stateChannel {
     if (state == THINKING) {
       p.CurrentState = state
-      fmt.Printf("philosopher %03d is thinking at %#v\n", p.id, time.Now())
+      fmt.Printf("philosopher %03d is thinking at %s\n", p.id, time.Now().Format("20060102150405"))
       // send off bottles
       p.Lock()
-      for i, b := range p.bottles {
+      fmt.Printf("about to send bottles %v\n", p.bottles)
+      for _, b := range p.bottles {
         queue, exists := p.bottleQueues[b.Id()]
         if (exists) {
           for len(queue) > 0 {
@@ -97,11 +102,11 @@ func (p *Philosopher) think(secondsForThinking int) {
         }
       }
 
-      p.bottles = make([]bottle, len(p.requiredBottles))
+      p.bottles = make([]Bottle, len(p.requiredBottles))
 
       p.Unlock()
 
-      time.Sleep(secondsForThinking * time.Second)
+      time.Sleep(time.Duration(secondsForThinking) * time.Second)
       p.stateChannel <- THIRSTING
     }
   }
@@ -111,11 +116,24 @@ func (p *Philosopher) thirst () {
   for state := range p.stateChannel {
     if (state == THIRSTING) {
       p.CurrentState = state
-      fmt.Printf("philosopher %03d is thirsty at %#v\n", p.id, time.Now())
+      fmt.Printf("philosopher %03d is thirsty at %s\n", p.id, time.Now().Format("20060102150405"))
       // should need to ask for necessary bottles only once
       for _, b := range p.requiredBottles {
-        otherDrinker := b.GetDrinker()
-        otherDrinker.ReleaseBottleTo(&p)
+        bottle := b
+        fmt.Printf("checking bottle availability %#v\n", bottle)
+        otherDrinker := bottle.GetDrinker()
+
+        if (otherDrinker == nil) {
+          fmt.Printf("no one has bottle %02d, taking it immediately\n", b.Id())
+          b.SetDrinker(*p)
+          p.bottles = append(p.bottles, b)
+        } else {
+          otherDrinker.ReleaseBottleTo(b, p)
+        }
+      }
+
+      if (len(p.bottles) == len(p.requiredBottles)) {
+        p.stateChannel <- DRINKING
       }
     }
   }
@@ -125,16 +143,17 @@ func (p *Philosopher) drink (secondsForDrinking int) {
   for state := range p.stateChannel {
     if (state == DRINKING) {
       p.CurrentState = state
-      fmt.Printf("philosopher %03d is drinking at %#v\n", p.id, time.Now())
-      time.Sleep(secondsForDrinking * time.Second)
+      fmt.Printf("philosopher %03d is drinking at %s with %#v bottles\n", p.id, time.Now().Format("20060102150405"), p.bottles)
+      time.Sleep(time.Duration(secondsForDrinking) * time.Second)
       p.stateChannel <- THINKING
     }
   }
 }
 
-func New (id int, bottles []bottle, secondsForThinking int, secondsForDrinking int) (Philosopher) {
+func New (id int, bottles []Bottle, secondsForThinking int, secondsForDrinking int) (Philosopher) {
 
   p := Philosopher { id: id, requiredBottles: bottles, stateChannel: make(chan State, 10) }
+  //fmt.Printf("created philosopher %03d: %+v\n", id, p)
 
   // thinking thread
   go p.think(secondsForThinking)

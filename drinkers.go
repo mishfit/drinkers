@@ -6,6 +6,7 @@ import (
   "flag"
   "fmt"
   "math/rand"
+  "os"
   "os/signal"
   "syscall"
 )
@@ -20,41 +21,37 @@ func main () {
 
   fmt.Println("drinkers", *countOfDrinkers)
   fmt.Println("bottles", *countOfBottles)
+  fmt.Println("Press Ctrl+C to exit...")
 
-  var bottles [*countOfBottles]bottle.Bottle
-  var philosophers [*countOfDrinkers]*philosopher.Philosopher
+  bottles := make([]bottle.Bottle, *countOfBottles)
+  philosophers := make([]philosopher.Philosopher, *countOfDrinkers)
 
   // create a specified number of bottles
   for i := 0; i < len(bottles); i++ {
-    bottle[i] = bottle.New(i)
+    b := bottle.New(i)
+    bottles[i] = b
   }
 
   // create a specified number of philosophers
-  for i := 0; i < len(philosopher); i++ {
+  for i := 0; i < len(philosophers); i++ {
     // assign each philosopher a random subset of bottles
     countOfRequiredBottles := rand.Intn(len(bottles)) + 1
     secondsForThinking := rand.Intn(20)
     secondsForDrinking := rand.Intn(30)
-    requiredBottles := make([]bottle.Bottle, countOfRequiredBottles)
-    var uniqueBottles = map[int]bottle.Bottle
-    indexOfBottle := 0
+    requiredBottles := make([]philosopher.Bottle, 0)
 
-    for {
+    var uniqueBottles = make(map[int]bool)
+
+    for len(requiredBottles) < countOfRequiredBottles {
       indexOfBottleToAdd := rand.Intn(len(bottles))
-      _, exists := uniqueBottles[indexOfBottle]
+      _, exists := uniqueBottles[indexOfBottleToAdd]
       if (!exists) {
-        uniqueBottles[indexOfBottleToAdd] = bottles[indexOfBottleToAdd]
-        requiredBottles[indexOfBottle] = bottles[indexOfBottleToAdd]
+        uniqueBottles[indexOfBottleToAdd] = true
+        requiredBottles = append(requiredBottles, &bottles[indexOfBottleToAdd])
       }
-
-      if (len(uniqueBottles) == countOfRequiredBottles) {
-        break
-      }
-
-      indexOfBottle++
     }
 
-    philosopher[i] = philosopher.New(i, requiredBottles, secondsForThinking, secondsForDrinking)
+    philosophers[i] = philosopher.New(i, requiredBottles, secondsForThinking, secondsForDrinking)
   }
 
 
@@ -67,6 +64,5 @@ func main () {
     done <- true
   }()
 
-  fmt.Println("Press Ctrl+C to exit...")
   <-done
 }

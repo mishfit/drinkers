@@ -8,21 +8,21 @@ import (
 
 type Bottle struct {
   id int
-  drinker *philosopher.Philosopher
+  drinker philosopher.Philosopher
   sync.Mutex
 }
 
-func (bottle *Bottle) Id() (int) {
+func (bottle Bottle) Id() (int) {
   return bottle.id
 }
 
-func (bottle *Bottle) GetDrinker () (*philosopher.Philosopher) {
-  return bottle.drinker
+func (bottle Bottle) GetDrinker () (*philosopher.Philosopher) {
+  return &bottle.drinker
 }
 
-func (bottle *Bottle) SetDrinker (drinker *philosopher.Philosopher) (error) {
+func (bottle *Bottle) SetDrinker (drinker philosopher.Philosopher) (error) {
   bottle.Lock()
-  if (bottle.drinker == nil || bottle.drinker.CurrentState == philosopher.THINKING) {
+  if (&bottle.drinker == nil || bottle.drinker.CurrentState == philosopher.THINKING) {
     bottle.drinker = drinker
   } else {
     return errors.New("bottle drinker is not in a 'THINKING' state")
